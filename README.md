@@ -78,6 +78,60 @@ If you run this anywhere other than localhost, set `INGEST_PUBLIC_URL` to the ho
 your applications will actually reach — that string is what gets baked into every DSN
 the UI hands out.
 
+## Behind a reverse proxy
+
+Pass the real `Host` through. nginx's `proxy_pass` sets `Host` to the *upstream*
+address by default, and Next.js reads that as the request's host — it then sees a
+Server Action posted from `sentric.example.com` claiming to be for `127.0.0.1:10001`,
+treats it as CSRF, and aborts every form on the dashboard with
+`Invalid Server Actions request`.
+
+```nginx
+server {
+  listen 80;
+  server_name sentric.example.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:10001;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-Host  $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Real-IP         $remote_addr;
+  }
+}
+
+server {
+  listen 80;
+  server_name ingest.sentric.example.com;
+
+  # ingest caps bodies at 1MB; leave headroom so nginx doesn't 413 first
+  client_max_body_size 2m;
+
+  location / {
+    proxy_pass http://127.0.0.1:10002;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Real-IP         $remote_addr;
+  }
+}
+```
+
+Then in `.env`, point `INGEST_PUBLIC_URL` at the public ingest hostname — that string
+is baked into every DSN the UI hands out, so leaving it on `localhost` gives your
+projects DSNs that only work on the server itself:
+
+```sh
+INGEST_PUBLIC_URL=https://ingest.sentric.example.com
+COOKIE_SECURE=1          # once TLS terminates at nginx
+```
+
+Changing `INGEST_PUBLIC_URL` only affects newly rendered DSNs; the keys themselves
+don't change, so apps already reporting keep working once you update their DSN host.
+
 ## Users
 
 Sign-up is deliberately CLI-only; there's no public registration and no admin role.
