@@ -1,0 +1,38 @@
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ingest:
+    build: ./ingest
+    ports:
+      - "${INGEST_PORT:-3001}:3001"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/sentric
+      PORT: "3001"
+      EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-30}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/sentric
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      INGEST_PUBLIC_URL: ${INGEST_PUBLIC_URL:-http://localhost:3001}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

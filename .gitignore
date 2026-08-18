@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# builds
+ingest/dist/
+web/.next/
+web/next-env.d.ts
+*.tsbuildinfo
+
+# environment — .env holds SESSION_SECRET; only the example is committed
+.env
+.env.local
+
+# logs & misc
+npm-debug.log*
+.DS_Store
