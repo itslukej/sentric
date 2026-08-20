@@ -56,6 +56,13 @@ the throw:
 
 ![Breadcrumbs](docs/screenshots/breadcrumbs.png)
 
+Every issue page and every issue list has a **Copy for LLM** button. It puts a markdown
+version of what you're looking at on the clipboard — the stack trace with source context,
+request, contexts and breadcrumbs — so you can paste it into whatever model you use
+instead of screenshotting a stack trace. Request headers that normally carry credentials
+(`Authorization`, `Cookie`, anything matching token/secret/api-key) come out as
+`[redacted]`, because unlike the dashboard itself that text leaves your infrastructure.
+
 Resolve an issue and it drops out of the unresolved list. If the same error happens
 again afterwards, Sentric reopens it and flags it as a **regression** rather than quietly
 leaving it resolved — a resolved issue that comes back is exactly the thing you want to
@@ -186,10 +193,12 @@ Both apps read the root `.env` in dev, so the same file drives compose and `npm 
 
 ```sh
 cd ingest && npm test
+cd web && npm test
 ```
 
-Tests cover the envelope parser and the grouping logic — the two places where a subtle
-change silently corrupts everything downstream. They're plain `node:test`, no framework.
+Tests cover the envelope parser, the grouping logic, and the LLM export — the places
+where a subtle change either silently corrupts everything downstream or quietly starts
+copying a credential onto your clipboard. They're plain `node:test`, no framework.
 
 ## Layout
 

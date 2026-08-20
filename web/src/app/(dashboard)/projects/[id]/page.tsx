@@ -5,6 +5,8 @@ import type { Filter } from "mongodb";
 import { getDb } from "@/lib/db";
 import { buildDsn } from "@/lib/dsn";
 import { safeLevel, TimeAgo } from "@/lib/format";
+import { CopyForLlm } from "@/lib/copy-button";
+import { issueListMarkdown } from "@/lib/llm-export";
 import { SetupInstructions } from "@/lib/setup";
 import { bucketByHour, Sparkline } from "@/lib/sparkline";
 import { getSession } from "@/lib/session";
@@ -164,6 +166,15 @@ export default async function ProjectPage({
   };
   const hasFilters = Boolean(q || sp.release || sp.environment || sp.tag);
 
+  // Mirrors exactly what the table below shows — same filters, same page.
+  const llmMarkdown = issueListMarkdown({
+    project,
+    issues,
+    status,
+    totalIssues,
+    filters: { q, release: sp.release, environment: sp.environment, tag: sp.tag },
+  });
+
   return (
     <>
       <p className="crumbs">
@@ -224,6 +235,12 @@ export default async function ProjectPage({
               </form>
             </div>
           </details>
+          {!awaitingFirstEvent && (
+            <CopyForLlm
+              text={llmMarkdown}
+              title="Copy the issues shown below as markdown, to paste into an LLM"
+            />
+          )}
           <Link href={`/projects/${projectId}/setup`} className="btn-link">
             Setup
           </Link>

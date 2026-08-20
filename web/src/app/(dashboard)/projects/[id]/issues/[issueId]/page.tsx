@@ -6,47 +6,20 @@ import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { safeLevel, TimeAgo } from "@/lib/format";
+import { CopyForLlm } from "@/lib/copy-button";
+import { breadcrumbs, crumbTime, exceptionValues, messageText, str } from "@/lib/event";
+import { issueMarkdown } from "@/lib/llm-export";
 import { bucketByHour, Sparkline } from "@/lib/sparkline";
 import type {
   EventDoc,
   IssueDoc,
   ProjectDoc,
   SentryBreadcrumb,
-  SentryExceptionValue,
   SentryStackFrame,
 } from "@/lib/types";
 import { deleteIssue, setIssueStatus } from "../../../../actions";
 
 export const dynamic = "force-dynamic";
-
-// Event payloads are attacker-controlled JSON stored under a permissive cast, so
-// a field the type says is a string can be an object/number at runtime. Coerce
-// before rendering — an object passed as a React child throws and 500s the page.
-function str(v: unknown): string {
-  if (typeof v === "string") return v;
-  if (v == null) return "";
-  if (typeof v === "object") {
-    try {
-      return JSON.stringify(v);
-    } catch {
-      return String(v);
-    }
-  }
-  return String(v);
-}
-
-function breadcrumbs(payload: EventDoc["payload"]): SentryBreadcrumb[] {
-  const bc = payload.breadcrumbs;
-  if (!bc) return [];
-  const values = Array.isArray(bc) ? bc : bc.values;
-  return Array.isArray(values) ? values : [];
-}
-
-function crumbTime(ts: SentryBreadcrumb["timestamp"]): string {
-  if (ts == null) return "";
-  const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(11, 23);
-}
 
 // Render a key/value block from an arbitrary object, coercing untrusted values.
 function KeyValues({ data }: { data: Record<string, unknown> }) {
@@ -62,23 +35,6 @@ function KeyValues({ data }: { data: Record<string, unknown> }) {
       ))}
     </dl>
   );
-}
-
-function exceptionValues(payload: EventDoc["payload"]): SentryExceptionValue[] {
-  const exc = payload.exception;
-  if (!exc) return [];
-  if (Array.isArray(exc)) return exc;
-  return exc.values ?? [];
-}
-
-function messageText(payload: EventDoc["payload"]): string | null {
-  const m = payload.message;
-  if (typeof m === "string") return m;
-  if (m && typeof m === "object") {
-    const text = m.formatted ?? m.message;
-    return text == null ? null : str(text);
-  }
-  return null;
 }
 
 function Frame({ frame }: { frame: SentryStackFrame }) {
@@ -210,6 +166,10 @@ export default async function IssuePage({
     issue.status === "open" ? "resolved" : "open"
   );
 
+  // Built here rather than in the browser so the client bundle stays free of the
+  // event payload; the button only ever receives the finished string.
+  const llmMarkdown = issueMarkdown({ project, issue, event: selected });
+
   const meta: [string, string][] = selected
     ? [
         ["event id", selected.eventId],
@@ -261,6 +221,10 @@ export default async function IssuePage({
             <Sparkline buckets={buckets} width={150} height={34} title="Events, last 24 hours" />
             <span className="muted chart-label">last 24h</span>
           </div>
+          <CopyForLlm
+            text={llmMarkdown}
+            title="Copy this issue as markdown — stack trace, context and breadcrumbs — to paste into an LLM"
+          />
           <form action={toggle} className="inline-form">
             <button type="submit" className={issue.status === "open" ? "primary" : ""}>
               {issue.status === "open" ? "Resolve" : "Reopen"}
